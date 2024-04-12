@@ -1,0 +1,66 @@
+From 3a3a960b022bdb6715544dd7f9076703714e3db8 Mon Sep 17 00:00:00 2001
+From: Dongli Si <sidongli1997@gmail.com>
+Date: Sat, 13 Apr 2024 06:46:06 +0800
+Subject: [PATCH] Support x86 architecture virtio over mmio
+
+Signed-off-by: Dongli Si <sidongli1997@gmail.com>
+---
+ builtin-run.c             | 4 +++-
+ include/kvm/virtio-mmio.h | 2 +-
+ virtio/core.c             | 4 ++--
+ 3 files changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/builtin-run.c b/builtin-run.c
+index c26184e..c2723b3 100644
+--- a/builtin-run.c
++++ b/builtin-run.c
+@@ -182,11 +182,13 @@ static int loglevel_parser(const struct option *opt, const char *arg, int unset)
+ 	" in megabytes (M)"
+ #endif
+ 
+-#if defined(CONFIG_ARM) || defined(CONFIG_ARM64) || defined(CONFIG_RISCV)
++// #if defined(CONFIG_ARM) || defined(CONFIG_ARM64) || defined(CONFIG_RISCV)
+ #define VIRTIO_TRANS_OPT_HELP_SHORT    "[pci|pci-legacy|mmio|mmio-legacy]"
++/*
+ #else
+ #define VIRTIO_TRANS_OPT_HELP_SHORT    "[pci|pci-legacy]"
+ #endif
++*/
+ 
+ #define BUILD_OPTIONS(name, cfg, kvm)					\
+ 	struct option name[] = {					\
+diff --git a/include/kvm/virtio-mmio.h b/include/kvm/virtio-mmio.h
+index b428b8d..05e3a2d 100644
+--- a/include/kvm/virtio-mmio.h
++++ b/include/kvm/virtio-mmio.h
+@@ -8,7 +8,7 @@
+ 
+ #define VIRTIO_MMIO_MAX_VQ	32
+ #define VIRTIO_MMIO_MAX_CONFIG	1
+-#define VIRTIO_MMIO_IO_SIZE	0x200
++#define VIRTIO_MMIO_IO_SIZE	0x1000
+ 
+ struct kvm;
+ 
+diff --git a/virtio/core.c b/virtio/core.c
+index b77e987..37d02a6 100644
+--- a/virtio/core.c
++++ b/virtio/core.c
+@@ -31,12 +31,12 @@ int virtio_transport_parser(const struct option *opt, const char *arg, int unset
+ 			*type = VIRTIO_PCI;
+ 		} else if (!strcmp(arg, "pci-legacy")) {
+ 			*type = VIRTIO_PCI_LEGACY;
+-#if defined(CONFIG_ARM) || defined(CONFIG_ARM64) || defined(CONFIG_RISCV)
++// #if defined(CONFIG_ARM) || defined(CONFIG_ARM64) || defined(CONFIG_RISCV)
+ 		} else if (!strcmp(arg, "mmio")) {
+ 			*type = VIRTIO_MMIO;
+ 		} else if (!strcmp(arg, "mmio-legacy")) {
+ 			*type = VIRTIO_MMIO_LEGACY;
+-#endif
++// #endif
+ 		} else {
+ 			pr_err("virtio-transport: unknown type \"%s\"\n", arg);
+ 			return -1;
+-- 
+2.41.0
+

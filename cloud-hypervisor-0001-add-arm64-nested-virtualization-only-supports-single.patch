@@ -1,0 +1,80 @@
+From 7b06ab0e1e7b0dc1185377575471f023cae6ea9f Mon Sep 17 00:00:00 2001
+From: Your Name <you@example.com>
+Date: Sun, 7 Apr 2024 10:42:27 +0800
+Subject: [PATCH] add arm64 nested virtualization, only supports single vcpu
+
+---
+ arch/src/aarch64/fdt.rs     |  2 +-
+ hypervisor/src/kvm/mod.rs   |  4 ++--
+ kvm-bindings_arm64_nv.patch | 12 ++++++++++++
+ vmm/src/cpu.rs              |  1 +
+ 4 files changed, 16 insertions(+), 3 deletions(-)
+ create mode 100644 kvm-bindings_arm64_nv.patch
+
+diff --git a/arch/src/aarch64/fdt.rs b/arch/src/aarch64/fdt.rs
+index 40677c4..e6d3cc6 100644
+--- a/arch/src/aarch64/fdt.rs
++++ b/arch/src/aarch64/fdt.rs
+@@ -682,7 +682,7 @@ fn create_psci_node(fdt: &mut FdtWriter) -> FdtWriterResult<()> {
+     // Two methods available: hvc and smc.
+     // As per documentation, PSCI calls between a guest and hypervisor may use the HVC conduit instead of SMC.
+     // So, since we are using kvm, we need to use hvc.
+-    fdt.property_string("method", "hvc")?;
++    fdt.property_string("method", "smc")?;
+     fdt.end_node(psci_node)?;
+ 
+     Ok(())
+diff --git a/hypervisor/src/kvm/mod.rs b/hypervisor/src/kvm/mod.rs
+index 8891bed..6879698 100644
+--- a/hypervisor/src/kvm/mod.rs
++++ b/hypervisor/src/kvm/mod.rs
+@@ -1440,14 +1440,14 @@ impl cpu::Vcpu for KvmVcpu {
+         #[allow(non_upper_case_globals)]
+         // PSR (Processor State Register) bits.
+         // Taken from arch/arm64/include/uapi/asm/ptrace.h.
+-        const PSR_MODE_EL1h: u64 = 0x0000_0005;
++        const PSR_MODE_EL2h: u64 = 0x0000_0009;
+         const PSR_F_BIT: u64 = 0x0000_0040;
+         const PSR_I_BIT: u64 = 0x0000_0080;
+         const PSR_A_BIT: u64 = 0x0000_0100;
+         const PSR_D_BIT: u64 = 0x0000_0200;
+         // Taken from arch/arm64/kvm/inject_fault.c.
+         const PSTATE_FAULT_BITS_64: u64 =
+-            PSR_MODE_EL1h | PSR_A_BIT | PSR_F_BIT | PSR_I_BIT | PSR_D_BIT;
++            PSR_MODE_EL2h | PSR_A_BIT | PSR_F_BIT | PSR_I_BIT | PSR_D_BIT;
+ 
+         let kreg_off = offset_of!(kvm_regs, regs);
+ 
+diff --git a/kvm-bindings_arm64_nv.patch b/kvm-bindings_arm64_nv.patch
+new file mode 100644
+index 0000000..669d6aa
+--- /dev/null
++++ b/kvm-bindings_arm64_nv.patch
+@@ -0,0 +1,12 @@
++diff --git a/src/arm64/bindings.rs b/src/arm64/bindings.rs
++index 1999661..bf9f716 100644
++--- a/src/arm64/bindings.rs
+++++ b/src/arm64/bindings.rs
++@@ -250,6 +250,7 @@ pub const KVM_ARM_VCPU_PMU_V3: u32 = 3;
++ pub const KVM_ARM_VCPU_SVE: u32 = 4;
++ pub const KVM_ARM_VCPU_PTRAUTH_ADDRESS: u32 = 5;
++ pub const KVM_ARM_VCPU_PTRAUTH_GENERIC: u32 = 6;
+++pub const KVM_ARM_VCPU_HAS_EL2: u32 = 7;
++ pub const KVM_ARM_MAX_DBG_REGS: u32 = 16;
++ pub const KVM_DEBUG_ARCH_HSR_HIGH_VALID: u32 = 1;
++ pub const KVM_GUESTDBG_USE_SW_BP: u32 = 65536;
+diff --git a/vmm/src/cpu.rs b/vmm/src/cpu.rs
+index b30c71c..c0f6cb5 100644
+--- a/vmm/src/cpu.rs
++++ b/vmm/src/cpu.rs
+@@ -319,6 +319,7 @@ impl Vcpu {
+             .map_err(Error::VcpuArmPreferredTarget)?;
+         // We already checked that the capability is supported.
+         kvi.features[0] |= 1 << kvm_bindings::KVM_ARM_VCPU_PSCI_0_2;
++        kvi.features[0] |= 1 << kvm_bindings::KVM_ARM_VCPU_HAS_EL2;
+         if vm
+             .as_any()
+             .downcast_ref::<hypervisor::kvm::KvmVm>()
+-- 
+2.41.0
+

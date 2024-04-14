@@ -1,0 +1,25 @@
+From 859adda2e5f957a885e34632999f84789b309d08 Mon Sep 17 00:00:00 2001
+From: Dongli Si <sidongli1997@gmail.com>
+Date: Sun, 14 Apr 2024 21:45:48 +0800
+Subject: [PATCH] Add KVM_ARM_VCPU_HAS_EL2 for arm64 nested virtualization
+
+Signed-off-by: Dongli Si <sidongli1997@gmail.com>
+---
+ src/arm64/bindings.rs | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/arm64/bindings.rs b/src/arm64/bindings.rs
+index 1e7e6e2..a92af32 100644
+--- a/src/arm64/bindings.rs
++++ b/src/arm64/bindings.rs
+@@ -244,6 +244,7 @@ pub const KVM_ARM_VCPU_PMU_V3: u32 = 3;
+ pub const KVM_ARM_VCPU_SVE: u32 = 4;
+ pub const KVM_ARM_VCPU_PTRAUTH_ADDRESS: u32 = 5;
+ pub const KVM_ARM_VCPU_PTRAUTH_GENERIC: u32 = 6;
++pub const KVM_ARM_VCPU_HAS_EL2: u32 = 7;
+ pub const KVM_ARM_MAX_DBG_REGS: u32 = 16;
+ pub const KVM_DEBUG_ARCH_HSR_HIGH_VALID: u32 = 1;
+ pub const KVM_GUESTDBG_USE_SW_BP: u32 = 65536;
+-- 
+2.41.0
+

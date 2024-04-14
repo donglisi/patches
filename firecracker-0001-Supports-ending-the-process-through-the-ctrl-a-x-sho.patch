@@ -1,0 +1,108 @@
+From a6160dbd41c64697c2cc81cfac8d8ee830524390 Mon Sep 17 00:00:00 2001
+From: Dongli Si <sidongli1997@gmail.com>
+Date: Mon, 15 Apr 2024 01:47:12 +0800
+Subject: [PATCH] Supports ending the process through the ctrl a + x shortcut
+ key
+
+Signed-off-by: Dongli Si <sidongli1997@gmail.com>
+---
+ src/vmm/src/builder.rs               |  1 +
+ src/vmm/src/device_manager/legacy.rs |  2 ++
+ src/vmm/src/devices/legacy/serial.rs | 26 +++++++++++++++++++++++---
+ 3 files changed, 26 insertions(+), 3 deletions(-)
+
+diff --git a/src/vmm/src/builder.rs b/src/vmm/src/builder.rs
+index 36f49a65..294c8403 100644
+--- a/src/vmm/src/builder.rs
++++ b/src/vmm/src/builder.rs
+@@ -709,6 +709,7 @@ pub fn setup_serial_device(
+             SerialOut::Stdout(out),
+         ),
+         input: Some(input),
++        term_got_escape: false,
+     })));
+     event_manager.add_subscriber(serial.clone());
+     Ok(serial)
+diff --git a/src/vmm/src/device_manager/legacy.rs b/src/vmm/src/device_manager/legacy.rs
+index 7c4a0719..73052fc1 100644
+--- a/src/vmm/src/device_manager/legacy.rs
++++ b/src/vmm/src/device_manager/legacy.rs
+@@ -113,6 +113,7 @@ impl PortIODeviceManager {
+                 SerialOut::Sink(std::io::sink()),
+             ),
+             input: None,
++            term_got_escape: false,
+         })));
+         let serial_1_3 = Arc::new(Mutex::new(BusDevice::Serial(SerialDevice {
+             serial: Serial::with_events(
+@@ -123,6 +124,7 @@ impl PortIODeviceManager {
+                 SerialOut::Sink(std::io::sink()),
+             ),
+             input: None,
++            term_got_escape: false,
+         })));
+         self.io_bus.insert(
+             self.stdio_serial.clone(),
+diff --git a/src/vmm/src/devices/legacy/serial.rs b/src/vmm/src/devices/legacy/serial.rs
+index a348291f..fc3dd6fb 100644
+--- a/src/vmm/src/devices/legacy/serial.rs
++++ b/src/vmm/src/devices/legacy/serial.rs
+@@ -68,17 +68,36 @@ pub enum RawIOError {
+ 
+ pub trait RawIOHandler {
+     /// Send raw input to this emulated device.
+-    fn raw_input(&mut self, _data: &[u8]) -> Result<(), RawIOError>;
++    fn raw_input(&mut self, _data: &[u8], term_got_escape: &mut bool) -> Result<(), RawIOError>;
+ }
+ 
+ impl<EV: SerialEvents + Debug, W: Write + Debug> RawIOHandler for Serial<EventFdTrigger, EV, W> {
+     // This is not used for anything and is basically just a dummy implementation for `raw_input`.
+-    fn raw_input(&mut self, data: &[u8]) -> Result<(), RawIOError> {
++    fn raw_input(&mut self, data: &[u8], term_got_escape: &mut bool) -> Result<(), RawIOError> {
+         // Fail fast if the serial is serviced with more data than it can buffer.
+         if data.len() > self.fifo_capacity() {
+             return Err(RawIOError::Serial(SerialError::FullFifo));
+         }
+ 
++        if data.len() == 1 {
++            if *term_got_escape {
++                *term_got_escape = false;
++                if data[0] == 0x78 {
++                    unsafe {libc::kill(std::process::id() as i32, libc::SIGTERM);}
++                }
++                if data[0] == 0x1 {
++                    self.enqueue_raw_bytes(data).map_err(RawIOError::Serial)?;
++                    return Ok(())
++                }
++            }
++            if data[0] == 0x1 {
++                *term_got_escape = true;
++                return Ok(())
++            }
++            self.enqueue_raw_bytes(data).map_err(RawIOError::Serial)?;
++            return Ok(())
++        }
++
+         // Before enqueuing bytes we first check if there is enough free space
+         // in the FIFO.
+         if self.fifo_capacity() >= data.len() {
+@@ -150,6 +169,7 @@ pub struct SerialWrapper<T: Trigger, EV: SerialEvents, I: Read + AsRawFd + Send>
+     pub serial: Serial<T, EV, SerialOut>,
+     /// Input to the serial device (needs to be readable).
+     pub input: Option<I>,
++    pub term_got_escape: bool,
+ }
+ 
+ impl<I: Read + AsRawFd + Send + Debug> SerialWrapper<EventFdTrigger, SerialEventsWrapper, I> {
+@@ -186,7 +206,7 @@ impl<I: Read + AsRawFd + Send + Debug> SerialWrapper<EventFdTrigger, SerialEvent
+             let count = input.read(&mut out)?;
+             if count > 0 {
+                 self.serial
+-                    .raw_input(&out[..count])
++                    .raw_input(&out[..count], &mut self.term_got_escape)
+                     .map_err(|_| io::Error::from_raw_os_error(libc::ENOBUFS))?;
+             }
+ 
+-- 
+2.41.0
+

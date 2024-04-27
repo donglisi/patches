@@ -1,9 +1,14 @@
-Author: Dongli Si <sidongli1997@gmail.com>
-Date:   Sat Apr 27 23:22:58 2024 +0800
+From 8c21c6c32e4a80fa0479f44bbd9fc4b81f78e20a Mon Sep 17 00:00:00 2001
+From: Dongli Si <sidongli1997@gmail.com>
+Date: Sat, 27 Apr 2024 23:22:58 +0800
+Subject: [PATCH] add arm64 nested virtualization, only supports single vcpu
 
-    add arm64 nested virtualization, only supports single vcpu
-    
-    Signed-off-by: Dongli Si <sidongli1997@gmail.com>
+Signed-off-by: Dongli Si <sidongli1997@gmail.com>
+---
+ arch/src/aarch64/fdt.rs   | 2 +-
+ hypervisor/src/kvm/mod.rs | 4 ++--
+ vmm/src/cpu.rs            | 1 +
+ 3 files changed, 4 insertions(+), 3 deletions(-)
 
 diff --git a/arch/src/aarch64/fdt.rs b/arch/src/aarch64/fdt.rs
 index af2695d0..52aba216 100644
@@ -51,3 +56,6 @@ index aa3589f6..ac4c1084 100644
          if vm
              .as_any()
              .downcast_ref::<hypervisor::kvm::KvmVm>()
+-- 
+2.41.0
+

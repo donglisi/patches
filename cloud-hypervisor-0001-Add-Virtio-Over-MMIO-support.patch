@@ -1,7 +1,7 @@
-From 70ca7547e2b793c2fd97d66e6f609c08a0040a9f Mon Sep 17 00:00:00 2001
+From 1471f1ab2dc00e3c7435716e6aa26592050fd9b7 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
 Date: Mon, 6 May 2024 16:11:08 +0800
-Subject: [PATCH] Add MMIO support
+Subject: [PATCH] Add Virtio Over MMIO support
 
 Signed-off-by: Dongli Si <sidongli1997@gmail.com>
 ---

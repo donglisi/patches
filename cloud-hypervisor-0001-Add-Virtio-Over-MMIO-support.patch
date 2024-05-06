@@ -1,15 +1,15 @@
-From 1471f1ab2dc00e3c7435716e6aa26592050fd9b7 Mon Sep 17 00:00:00 2001
+From bf4b8b81b558d53b77ec9efbcf056b9d47599fd1 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
-Date: Mon, 6 May 2024 16:11:08 +0800
+Date: Mon, 6 May 2024 19:58:36 +0800
 Subject: [PATCH] Add Virtio Over MMIO support
 
 Signed-off-by: Dongli Si <sidongli1997@gmail.com>
 ---
  virtio-devices/src/transport/mmio_device.rs | 299 ++++++++++++++++++++
  virtio-devices/src/transport/mod.rs         |   3 +
- vmm/src/device_manager.rs                   |  99 ++++++-
+ vmm/src/device_manager.rs                   |  97 ++++++-
  vmm/src/vm.rs                               |  25 +-
- 4 files changed, 409 insertions(+), 17 deletions(-)
+ 4 files changed, 408 insertions(+), 16 deletions(-)
  create mode 100644 virtio-devices/src/transport/mmio_device.rs
 
 diff --git a/virtio-devices/src/transport/mmio_device.rs b/virtio-devices/src/transport/mmio_device.rs
@@ -332,7 +332,7 @@ index 3a43b73c..b94b5654 100644
      fn ioeventfds(&self, base_addr: u64) -> Vec<(&EventFd, u64)>;
  }
 diff --git a/vmm/src/device_manager.rs b/vmm/src/device_manager.rs
-index 80eac72c..5fda9748 100644
+index 80eac72c..f4584d44 100644
 --- a/vmm/src/device_manager.rs
 +++ b/vmm/src/device_manager.rs
 @@ -79,7 +79,7 @@ use std::time::Instant;
@@ -443,15 +443,6 @@ index 80eac72c..5fda9748 100644
      #[cfg(target_arch = "aarch64")]
      fn add_interrupt_controller(
          &mut self,
-@@ -2337,7 +2361,7 @@ impl DeviceManager {
-         // Create "standard" virtio devices (net/block/rng)
-         devices.append(&mut self.make_virtio_block_devices()?);
-         devices.append(&mut self.make_virtio_net_devices()?);
--        devices.append(&mut self.make_virtio_rng_devices()?);
-+        // devices.append(&mut self.make_virtio_rng_devices()?);
- 
-         // Add virtio-fs if required
-         devices.append(&mut self.make_virtio_fs_devices()?);
 @@ -3909,6 +3933,66 @@ impl DeviceManager {
          Ok(pci_device_bdf)
      }

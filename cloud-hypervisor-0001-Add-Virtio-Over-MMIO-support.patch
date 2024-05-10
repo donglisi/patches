@@ -2,6 +2,7 @@ From bf4b8b81b558d53b77ec9efbcf056b9d47599fd1 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
 Date: Mon, 6 May 2024 19:58:36 +0800
 Subject: [PATCH] Add Virtio Over MMIO support
+seccomp needs to be turned off。
 
 Signed-off-by: Dongli Si <sidongli1997@gmail.com>
 ---

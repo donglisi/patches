@@ -1,12 +1,12 @@
-From cfe54f1512404a73935a676fe605409bada66959 Mon Sep 17 00:00:00 2001
+From a9c6b120e977aa3536d5d1a663465523950b05d9 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
-Date: Fri, 24 May 2024 14:34:20 +0800
+Date: Sat, 25 May 2024 06:40:47 +0800
 Subject: [PATCH] Enable io apic support
 
 ---
  x86/kvm.c     |  2 +-
- x86/mptable.c | 16 +++++++++++++++-
- 2 files changed, 16 insertions(+), 2 deletions(-)
+ x86/mptable.c | 23 +++++++++++++++++++----
+ 2 files changed, 20 insertions(+), 5 deletions(-)
 
 diff --git a/x86/kvm.c b/x86/kvm.c
 index 71ebb1e..e07d964 100644
@@ -22,10 +22,20 @@ index 71ebb1e..e07d964 100644
  	if (video)
  		strcat(cmdline, " video=vesafb");
 diff --git a/x86/mptable.c b/x86/mptable.c
-index f13cf0f..c3adc7c 100644
+index f13cf0f..82b692e 100644
 --- a/x86/mptable.c
 +++ b/x86/mptable.c
-@@ -180,7 +180,7 @@ int mptable__init(struct kvm *kvm)
+@@ -171,16 +171,14 @@ int mptable__init(struct kvm *kvm)
+ 	nentries++;
+ 
+ 	/*
+-	 * IRQ sources.
+-	 * Also note we use PCI irqs here, no for ISA bus yet.
++	 * PCI IRQ sources.
+ 	 */
+-
+ 	dev_hdr = device__first_dev(DEVICE_BUS_PCI);
+ 	while (dev_hdr) {
  		unsigned char srcbusirq;
  		struct pci_device_header *pci_hdr = dev_hdr->data;
  
@@ -34,19 +44,22 @@ index f13cf0f..c3adc7c 100644
  		mpc_intsrc = last_addr;
  		mptable_add_irq_src(mpc_intsrc, pcibusid, srcbusirq, ioapicid, pci_hdr->irq_line);
  
-@@ -189,6 +189,20 @@ int mptable__init(struct kvm *kvm)
+@@ -189,6 +187,23 @@ int mptable__init(struct kvm *kvm)
  		dev_hdr = device__next_dev(dev_hdr);
  	}
  
++	/*
++	 * ISA IRQ sources.
++	 */
 +	for (i = 0; i < 16; i++) {
 +		if (i == 2)
 +			continue;
 +
 +		mpc_intsrc = last_addr;
-+		mptable_add_irq_src(mpc_intsrc, isabusid, i, ioapicid, i);
-+
 +		if (i == 0)
-+			mpc_intsrc->dstirq = 2;
++			mptable_add_irq_src(mpc_intsrc, isabusid, i, ioapicid, 2);
++		else
++			mptable_add_irq_src(mpc_intsrc, isabusid, i, ioapicid, i);
 +
 +		last_addr = (void *)&mpc_intsrc[1];
 +		nentries++;
@@ -57,4 +70,3 @@ index f13cf0f..c3adc7c 100644
  	 */
 -- 
 2.41.0
-

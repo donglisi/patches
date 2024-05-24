@@ -1,0 +1,60 @@
+From cfe54f1512404a73935a676fe605409bada66959 Mon Sep 17 00:00:00 2001
+From: Dongli Si <sidongli1997@gmail.com>
+Date: Fri, 24 May 2024 14:34:20 +0800
+Subject: [PATCH] Enable io apic support
+
+---
+ x86/kvm.c     |  2 +-
+ x86/mptable.c | 16 +++++++++++++++-
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/x86/kvm.c b/x86/kvm.c
+index 71ebb1e..e07d964 100644
+--- a/x86/kvm.c
++++ b/x86/kvm.c
+@@ -130,7 +130,7 @@ void kvm__init_ram(struct kvm *kvm)
+ /* Arch-specific commandline setup */
+ void kvm__arch_set_cmdline(char *cmdline, bool video)
+ {
+-	strcpy(cmdline, "noapic noacpi pci=conf1 reboot=k panic=1 i8042.direct=1 "
++	strcpy(cmdline, "noacpi pci=conf1 reboot=k panic=1 i8042.direct=1 "
+ 				"i8042.dumbkbd=1 i8042.nopnp=1");
+ 	if (video)
+ 		strcat(cmdline, " video=vesafb");
+diff --git a/x86/mptable.c b/x86/mptable.c
+index f13cf0f..c3adc7c 100644
+--- a/x86/mptable.c
++++ b/x86/mptable.c
+@@ -180,7 +180,7 @@ int mptable__init(struct kvm *kvm)
+ 		unsigned char srcbusirq;
+ 		struct pci_device_header *pci_hdr = dev_hdr->data;
+ 
+-		srcbusirq = (pci_hdr->subsys_id << 2) | (pci_hdr->irq_pin - 1);
++		srcbusirq = (dev_hdr->dev_num << 2) | (pci_hdr->irq_pin - 1);
+ 		mpc_intsrc = last_addr;
+ 		mptable_add_irq_src(mpc_intsrc, pcibusid, srcbusirq, ioapicid, pci_hdr->irq_line);
+ 
+@@ -189,6 +189,20 @@ int mptable__init(struct kvm *kvm)
+ 		dev_hdr = device__next_dev(dev_hdr);
+ 	}
+ 
++	for (i = 0; i < 16; i++) {
++		if (i == 2)
++			continue;
++
++		mpc_intsrc = last_addr;
++		mptable_add_irq_src(mpc_intsrc, isabusid, i, ioapicid, i);
++
++		if (i == 0)
++			mpc_intsrc->dstirq = 2;
++
++		last_addr = (void *)&mpc_intsrc[1];
++		nentries++;
++	}
++
+ 	/*
+ 	 * Local IRQs assignment (LINT0, LINT1)
+ 	 */
+-- 
+2.41.0
+

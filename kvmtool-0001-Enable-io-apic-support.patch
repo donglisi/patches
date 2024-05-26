@@ -1,13 +1,28 @@
-From a9c6b120e977aa3536d5d1a663465523950b05d9 Mon Sep 17 00:00:00 2001
+From e23eb20652096a36e182470e25104648cedcd5c7 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
-Date: Sat, 25 May 2024 06:40:47 +0800
+Date: Sun, 26 May 2024 17:46:03 +0800
 Subject: [PATCH] Enable io apic support
 
 ---
+ x86/cpuid.c   |  3 +++
  x86/kvm.c     |  2 +-
  x86/mptable.c | 23 +++++++++++++++++++----
- 2 files changed, 20 insertions(+), 5 deletions(-)
+ 3 files changed, 23 insertions(+), 5 deletions(-)
 
+diff --git a/x86/cpuid.c b/x86/cpuid.c
+index f4347a8..162f8cd 100644
+--- a/x86/cpuid.c
++++ b/x86/cpuid.c
+@@ -55,6 +55,9 @@ static void filter_cpuid(struct kvm_cpuid2 *kvm_cpuid, int cpu_id)
+ 					entry->eax = 0;
+ 			}
+ 			break;
++		case 0x80000001:
++			entry->ecx &= ~(1 << 22);
++			break;
+ 		}
+ 		default:
+ 			/* Keep the CPUID function as -is */
 diff --git a/x86/kvm.c b/x86/kvm.c
 index 71ebb1e..e07d964 100644
 --- a/x86/kvm.c
@@ -70,3 +85,4 @@ index f13cf0f..82b692e 100644
  	 */
 -- 
 2.41.0
+

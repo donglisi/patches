@@ -1,16 +1,17 @@
-From bf4b8b81b558d53b77ec9efbcf056b9d47599fd1 Mon Sep 17 00:00:00 2001
+From 008db4ab96c59885d747649a80f69240460f7247 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
-Date: Mon, 6 May 2024 19:58:36 +0800
+Date: Mon, 22 Jul 2024 22:23:35 +0800
 Subject: [PATCH] Add Virtio Over MMIO support
-seccomp needs to be turned off.
 
-Signed-off-by: Dongli Si <sidongli1997@gmail.com>
+Support for x86_64 and aarch64 architectures
+
+seccomp needs to be turned off (--seccomp false)
 ---
  virtio-devices/src/transport/mmio_device.rs | 299 ++++++++++++++++++++
  virtio-devices/src/transport/mod.rs         |   3 +
- vmm/src/device_manager.rs                   |  97 ++++++-
- vmm/src/vm.rs                               |  25 +-
- 4 files changed, 408 insertions(+), 16 deletions(-)
+ vmm/src/device_manager.rs                   | 110 ++++++-
+ vmm/src/vm.rs                               |  26 +-
+ 4 files changed, 422 insertions(+), 16 deletions(-)
  create mode 100644 virtio-devices/src/transport/mmio_device.rs
 
 diff --git a/virtio-devices/src/transport/mmio_device.rs b/virtio-devices/src/transport/mmio_device.rs
@@ -333,10 +334,10 @@ index 3a43b73c..b94b5654 100644
      fn ioeventfds(&self, base_addr: u64) -> Vec<(&EventFd, u64)>;
  }
 diff --git a/vmm/src/device_manager.rs b/vmm/src/device_manager.rs
-index 80eac72c..f4584d44 100644
+index d6fc1b94..4c9de953 100644
 --- a/vmm/src/device_manager.rs
 +++ b/vmm/src/device_manager.rs
-@@ -79,7 +79,7 @@ use std::time::Instant;
+@@ -78,7 +78,7 @@ use std::time::Instant;
  use tracer::trace_scoped;
  use vfio_ioctls::{VfioContainer, VfioDevice, VfioDeviceFd};
  use virtio_devices::transport::VirtioTransport;
@@ -345,15 +346,18 @@ index 80eac72c..f4584d44 100644
  use virtio_devices::vhost_user::VhostUserConfig;
  use virtio_devices::{
      AccessPlatformMapping, ActivateError, VdpaDmaMapping, VirtioMemMappingSource,
-@@ -106,7 +106,6 @@ use vmm_sys_util::eventfd::EventFd;
+@@ -104,8 +104,9 @@ use vm_virtio::VirtioDeviceType;
+ use vmm_sys_util::eventfd::EventFd;
  #[cfg(target_arch = "x86_64")]
  use {devices::debug_console, devices::legacy::Serial};
- 
--#[cfg(target_arch = "aarch64")]
+-
+ #[cfg(target_arch = "aarch64")]
++use arch::aarch64::layout::{IRQ_BASE};
++
  const MMIO_LEN: u64 = 0x1000;
  
  // Singleton devices / devices the user cannot name
-@@ -235,6 +234,9 @@ pub enum DeviceManagerError {
+@@ -234,6 +235,9 @@ pub enum DeviceManagerError {
      /// Cannot create virtio device
      VirtioDevice(virtio_devices::transport::VirtioPciDeviceError),
  
@@ -363,7 +367,7 @@ index 80eac72c..f4584d44 100644
      /// Cannot add PCI device
      AddPciDevice(pci::PciRootError),
  
-@@ -849,7 +851,6 @@ pub struct DeviceManager {
+@@ -796,7 +800,6 @@ pub struct DeviceManager {
      interrupt_controller: Option<Arc<Mutex<gic::Gic>>>,
  
      // Things to be added to the commandline (e.g. aarch64 early console)
@@ -371,7 +375,7 @@ index 80eac72c..f4584d44 100644
      cmdline_additions: Vec<String>,
  
      // ACPI GED notification device
-@@ -1111,10 +1112,12 @@ impl DeviceManager {
+@@ -1057,10 +1060,12 @@ impl DeviceManager {
              .ok_or(DeviceManagerError::AllocateIoPort)?;
  
          let mut pci_irq_slots = [0; 32];
@@ -384,7 +388,7 @@ index 80eac72c..f4584d44 100644
  
          let mut pci_segments = vec![PciSegment::new_default_segment(
              &address_manager,
-@@ -1184,7 +1187,6 @@ impl DeviceManager {
+@@ -1129,7 +1134,6 @@ impl DeviceManager {
              address_manager: Arc::clone(&address_manager),
              console: Arc::new(Console::default()),
              interrupt_controller: None,
@@ -392,7 +396,7 @@ index 80eac72c..f4584d44 100644
              cmdline_additions: Vec::new(),
              ged_notification_device: None,
              config,
-@@ -1322,6 +1324,7 @@ impl DeviceManager {
+@@ -1244,6 +1248,7 @@ impl DeviceManager {
          #[cfg(target_arch = "aarch64")]
          self.add_legacy_devices(&legacy_interrupt_manager)?;
  
@@ -400,7 +404,7 @@ index 80eac72c..f4584d44 100644
          {
              self.ged_notification_device = self.add_acpi_devices(
                  &legacy_interrupt_manager,
-@@ -1333,6 +1336,7 @@ impl DeviceManager {
+@@ -1255,6 +1260,7 @@ impl DeviceManager {
                      .map_err(DeviceManagerError::EventFd)?,
              )?;
          }
@@ -408,7 +412,7 @@ index 80eac72c..f4584d44 100644
  
          self.original_termios_opt = original_termios_opt;
  
-@@ -1354,7 +1358,8 @@ impl DeviceManager {
+@@ -1274,7 +1280,8 @@ impl DeviceManager {
  
          virtio_devices.append(&mut self.make_virtio_devices()?);
  
@@ -418,7 +422,7 @@ index 80eac72c..f4584d44 100644
  
          self.virtio_devices = virtio_devices;
  
-@@ -1490,6 +1495,25 @@ impl DeviceManager {
+@@ -1410,6 +1417,25 @@ impl DeviceManager {
          Ok(())
      }
  
@@ -433,7 +437,7 @@ index 80eac72c..f4584d44 100644
 +                .lock()
 +                .unwrap()
 +                .allocate_platform_mmio_addresses(None, MMIO_LEN as u64, Some(MMIO_LEN))
-+                .ok_or(DeviceManagerError::AllocateIoPort)?;
++                .ok_or(DeviceManagerError::AllocateMmioAddress)?;
 +
 +           self.add_virtio_mmio_device(device.virtio_device, mmio_base);
 +        }
@@ -444,7 +448,7 @@ index 80eac72c..f4584d44 100644
      #[cfg(target_arch = "aarch64")]
      fn add_interrupt_controller(
          &mut self,
-@@ -3909,6 +3933,66 @@ impl DeviceManager {
+@@ -3743,6 +3769,77 @@ impl DeviceManager {
          Ok(pci_device_bdf)
      }
  
@@ -498,6 +502,17 @@ index 80eac72c..f4584d44 100644
 +            )
 +            .map_err(DeviceManagerError::BusError)?;
 +
++        #[cfg(target_arch = "aarch64")]
++        self.id_to_dev_info.insert(
++            (DeviceType::Virtio(mmio_irq), "virtio".to_string()),
++            MmioDeviceInfo {
++                addr: mmio_base.0,
++                len: MMIO_LEN,
++                irq: mmio_irq - IRQ_BASE,
++            },
++        );
++
++        #[cfg(target_arch = "x86_64")]
 +        self.cmdline_additions.push(format!(
 +            "virtio_mmio.device={}K@0x{:08x}:{}",
 +            MMIO_LEN / 1024,
@@ -511,7 +526,7 @@ index 80eac72c..f4584d44 100644
      fn add_pvpanic_device(
          &mut self,
      ) -> DeviceManagerResult<Option<Arc<Mutex<devices::PvPanicDevice>>>> {
-@@ -4005,7 +4089,6 @@ impl DeviceManager {
+@@ -3839,7 +3936,6 @@ impl DeviceManager {
          &self.console
      }
  
@@ -519,7 +534,7 @@ index 80eac72c..f4584d44 100644
      pub fn cmdline_additions(&self) -> &[String] {
          self.cmdline_additions.as_slice()
      }
-@@ -4803,12 +4886,14 @@ impl Aml for DeviceManager {
+@@ -4637,12 +4733,14 @@ impl Aml for DeviceManager {
              TpmDevice {}.to_aml_bytes(sink);
          }
  
@@ -535,10 +550,10 @@ index 80eac72c..f4584d44 100644
  }
  
 diff --git a/vmm/src/vm.rs b/vmm/src/vm.rs
-index c462f80d..7bb7d582 100644
+index 71793f7b..72f2b0c3 100644
 --- a/vmm/src/vm.rs
 +++ b/vmm/src/vm.rs
-@@ -496,13 +496,6 @@ impl Vm {
+@@ -501,13 +501,6 @@ impl Vm {
              .validate()
              .map_err(Error::ConfigValidation)?;
  
@@ -552,7 +567,7 @@ index c462f80d..7bb7d582 100644
          info!("Booting VM from config: {:?}", &config);
  
          // Create NUMA nodes based on NumaConfig.
-@@ -685,6 +678,13 @@ impl Vm {
+@@ -683,6 +676,13 @@ impl Vm {
              VmState::Created
          };
  
@@ -566,7 +581,7 @@ index c462f80d..7bb7d582 100644
          Ok(Vm {
              #[cfg(feature = "tdx")]
              kernel,
-@@ -948,14 +948,15 @@ impl Vm {
+@@ -942,14 +942,15 @@ impl Vm {
  
      pub fn generate_cmdline(
          payload: &PayloadConfig,
@@ -584,7 +599,7 @@ index c462f80d..7bb7d582 100644
          for entry in device_manager.lock().unwrap().cmdline_additions() {
              cmdline.insert_str(entry).map_err(Error::CmdLineInsertStr)?;
          }
-@@ -1103,6 +1104,7 @@ impl Vm {
+@@ -1097,6 +1098,7 @@ impl Vm {
      fn load_payload(
          payload: &PayloadConfig,
          memory_manager: Arc<Mutex<MemoryManager>>,
@@ -592,7 +607,7 @@ index c462f80d..7bb7d582 100644
          #[cfg(feature = "igvm")] cpu_manager: Arc<Mutex<cpu::CpuManager>>,
          #[cfg(feature = "sev_snp")] sev_snp_enabled: bool,
      ) -> Result<EntryPoint> {
-@@ -1131,7 +1133,7 @@ impl Vm {
+@@ -1125,7 +1127,7 @@ impl Vm {
              }
              (None, Some(kernel), _, _) => {
                  let kernel = File::open(kernel).map_err(Error::KernelFile)?;
@@ -601,7 +616,7 @@ index c462f80d..7bb7d582 100644
                  Self::load_kernel(kernel, Some(cmdline), memory_manager)
              }
              _ => Err(Error::InvalidPayload),
-@@ -1159,6 +1161,7 @@ impl Vm {
+@@ -1153,6 +1155,7 @@ impl Vm {
      fn load_payload_async(
          memory_manager: &Arc<Mutex<MemoryManager>>,
          config: &Arc<Mutex<VmConfig>>,
@@ -609,7 +624,7 @@ index c462f80d..7bb7d582 100644
          #[cfg(feature = "igvm")] cpu_manager: &Arc<Mutex<cpu::CpuManager>>,
          #[cfg(feature = "sev_snp")] sev_snp_enabled: bool,
      ) -> Result<Option<thread::JoinHandle<Result<EntryPoint>>>> {
-@@ -1175,6 +1178,7 @@ impl Vm {
+@@ -1169,6 +1172,7 @@ impl Vm {
              .as_ref()
              .map(|payload| {
                  let memory_manager = memory_manager.clone();
@@ -617,13 +632,14 @@ index c462f80d..7bb7d582 100644
                  let payload = payload.clone();
                  #[cfg(feature = "igvm")]
                  let cpu_manager = cpu_manager.clone();
-@@ -1185,6 +1189,7 @@ impl Vm {
+@@ -1179,6 +1183,8 @@ impl Vm {
                          Self::load_payload(
                              &payload,
                              memory_manager,
++                            #[cfg(target_arch = "x86_64")]
 +                            device_manager,
                              #[cfg(feature = "igvm")]
                              cpu_manager,
                              #[cfg(feature = "sev_snp")]
 -- 
-2.41.0
+2.44.0

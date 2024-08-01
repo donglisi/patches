@@ -1,25 +1,25 @@
-From 008db4ab96c59885d747649a80f69240460f7247 Mon Sep 17 00:00:00 2001
+From 245decec9c9650711b1adb3b46d0d924b6fffae7 Mon Sep 17 00:00:00 2001
 From: Dongli Si <sidongli1997@gmail.com>
-Date: Mon, 22 Jul 2024 22:23:35 +0800
-Subject: [PATCH] Add Virtio Over MMIO support
-
-Support for x86_64 and aarch64 architectures
+Date: Thu, 1 Aug 2024 23:12:35 +0800
+Subject: [PATCH] Support for x86_64 and aarch64 architectures
 
 seccomp needs to be turned off (--seccomp false)
+
+Signed-off-by: Dongli Si <sidongli1997@gmail.com>
 ---
- virtio-devices/src/transport/mmio_device.rs | 299 ++++++++++++++++++++
+ virtio-devices/src/transport/mmio_device.rs | 306 ++++++++++++++++++++
  virtio-devices/src/transport/mod.rs         |   3 +
  vmm/src/device_manager.rs                   | 110 ++++++-
  vmm/src/vm.rs                               |  26 +-
- 4 files changed, 422 insertions(+), 16 deletions(-)
+ 4 files changed, 429 insertions(+), 16 deletions(-)
  create mode 100644 virtio-devices/src/transport/mmio_device.rs
 
 diff --git a/virtio-devices/src/transport/mmio_device.rs b/virtio-devices/src/transport/mmio_device.rs
 new file mode 100644
-index 00000000..f59ccb36
+index 00000000..5c88805c
 --- /dev/null
 +++ b/virtio-devices/src/transport/mmio_device.rs
-@@ -0,0 +1,299 @@
+@@ -0,0 +1,306 @@
 +// Copyright 2018 The Chromium OS Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE-BSD-3-Clause file.
@@ -215,7 +215,14 @@ index 00000000..f59ccb36
 +                    0x04 => MMIO_VERSION,
 +                    0x08 => self.device.lock().unwrap().device_type(),
 +                    0x0c => VENDOR_ID, // vendor id
-+                    0x10 => if self.features_select == 1 { 0x1 } else { 0x0 },
++                    0x10 => {
++                        if self.features_select < 2 {
++                            (self.device.lock().unwrap().features() >> (self.features_select * 32))
++                                as u32
++                        } else {
++                            0
++                        }
++                    }
 +                    0x34 => self.with_queue(0, |q| u32::from(q.max_size())),
 +                    0x44 => self.with_queue(0, |q| q.ready() as u32),
 +                    0x60 => self.interrupt_status.load(Ordering::SeqCst) as u32,
